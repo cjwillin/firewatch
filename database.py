@@ -5,12 +5,13 @@ SQLite with WAL mode for concurrent reads (F-008 from documented failure modes).
 """
 
 import sys
+import os
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import sqlite3
 
-DATABASE_URL = "sqlite:///./firewatch.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./firewatch.db")
 
 try:
     engine = create_engine(

@@ -1,0 +1,37 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment
+.env
+.env.local
+
+# Database (use mounted volume)
+*.db
+*.db-shm
+*.db-wal
+
+# QA Reports
+.gstack/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Documentation (not needed in container)
+IMPLEMENTATION.md
+
+# Scripts (handled by Dockerfile CMD)
+start.sh
+validate.py
+
+# OS
+.DS_Store
