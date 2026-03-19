@@ -47,7 +47,7 @@ API RESPONSE PARSING FLOW (from eng review):
 
 import httpx
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 import logging
 
@@ -261,6 +261,7 @@ class RecreationClient:
         checkin_date: date,
         checkout_date: date,
         site_type: Optional[str] = None,
+        site_numbers: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         Check availability with date-by-date breakdown for calendar UI.
@@ -314,6 +315,16 @@ class RecreationClient:
 
         # Process each site
         for site_id, site_data in campsites.items():
+            # Filter by site_numbers if specified
+            if site_numbers is not None:
+                if len(site_numbers) == 0:
+                    continue
+                try:
+                    if int(site_id) not in site_numbers:
+                        continue
+                except ValueError:
+                    continue
+
             # Filter by site_type if not "Any"
             if site_type and site_type != "Any":
                 campsite_type = site_data.get("campsite_type", "").upper()

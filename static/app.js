@@ -163,29 +163,84 @@ async function searchCampgrounds(query) {
 
 function selectCampground(campground) {
     selectedCampground = campground;
-    
+
     // Hide search results
     document.getElementById('searchResults').classList.add('hidden');
-    
+
     // Move to step 2
     document.getElementById('searchStep').classList.add('hidden');
     document.getElementById('datesStep').classList.remove('hidden');
-    
+
     // Update progress
     document.getElementById('step1').classList.remove('step-active');
     document.getElementById('step1').classList.add('step-complete');
     document.getElementById('step2').classList.remove('step-inactive');
     document.getElementById('step2').classList.add('step-active');
-    
+
     // Display selected campground
     document.getElementById('selectedCampgroundName').textContent = campground.name;
     document.getElementById('selectedCampgroundLocation').textContent = campground.location;
-    
+
     const imgEl = document.getElementById('selectedCampgroundImage');
     if (campground.preview_image_url) {
         imgEl.src = campground.preview_image_url;
         imgEl.style.display = 'block';
     }
+
+    // Load available sites for selection
+    loadCampgroundSites(campground.id);
+}
+
+async function loadCampgroundSites(campgroundId) {
+    const loadingEl = document.getElementById('siteSelectionLoading');
+    const listEl = document.getElementById('siteSelectionList');
+
+    loadingEl.classList.remove('hidden');
+    listEl.classList.add('hidden');
+
+    try {
+        const sites = await apiFetch(`${API_BASE}/campgrounds/${campgroundId}/sites`);
+
+        if (sites.length === 0) {
+            loadingEl.textContent = 'No sites found for this campground';
+            return;
+        }
+
+        // Generate checkboxes
+        listEl.innerHTML = sites.map(site => `
+            <label class="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox"
+                       class="site-checkbox"
+                       value="${site.site_id}"
+                       data-name="${site.site_name}">
+                <span class="text-sm">${site.site_name}</span>
+            </label>
+        `).join('');
+
+        loadingEl.classList.add('hidden');
+        listEl.classList.remove('hidden');
+
+    } catch (err) {
+        console.error('Failed to load sites:', err);
+        loadingEl.textContent = 'Failed to load sites. You can still check availability for all sites.';
+    }
+}
+
+function selectAllSites() {
+    document.querySelectorAll('.site-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+}
+
+function clearAllSites() {
+    document.querySelectorAll('.site-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
+
+function getSelectedSites() {
+    const checkboxes = document.querySelectorAll('.site-checkbox:checked');
+    return Array.from(checkboxes).map(cb => parseInt(cb.value));
 }
 
 function backToSearch() {
@@ -232,33 +287,38 @@ async function checkAvailability() {
     const checkin = document.getElementById('checkinDate').value;
     const checkout = document.getElementById('checkoutDate').value;
     const siteType = document.getElementById('siteType').value;
-    
+    const selectedSites = getSelectedSites();
+
     if (!checkin || !checkout) {
         alert('Please select both check-in and check-out dates');
         return;
     }
-    
+
     if (new Date(checkout) <= new Date(checkin)) {
         alert('Check-out must be after check-in');
         return;
     }
-    
+
     // Move to step 3
     document.getElementById('datesStep').classList.add('hidden');
     document.getElementById('availabilityStep').classList.remove('hidden');
     document.getElementById('availabilityLoading').classList.remove('hidden');
     document.getElementById('availabilityResults').classList.add('hidden');
-    
+
     // Update progress
     document.getElementById('step2').classList.remove('step-active');
     document.getElementById('step2').classList.add('step-complete');
     document.getElementById('step3').classList.remove('step-inactive');
     document.getElementById('step3').classList.add('step-active');
-    
+
     try {
-        const response = await apiFetch(
-            `${API_BASE}/campgrounds/${selectedCampground.id}/availability?checkin=${checkin}&checkout=${checkout}&site_type=${siteType}`
-        );
+        // Build URL with optional site_numbers parameter
+        let url = `${API_BASE}/campgrounds/${selectedCampground.id}/availability?checkin=${checkin}&checkout=${checkout}&site_type=${siteType}`;
+        if (selectedSites.length > 0) {
+            url += `&site_numbers=${selectedSites.join(',')}`;
+        }
+
+        const response = await apiFetch(url);
         
         availabilityData = response;
         renderAvailabilityResults(response);
@@ -436,13 +496,15 @@ async function createWatchFromAvailability() {
     const checkin = document.getElementById('checkinDate').value;
     const checkout = document.getElementById('checkoutDate').value;
     const siteType = document.getElementById('siteType').value;
-    
+    const selectedSites = getSelectedSites();
+
     const watchData = {
         campground_id: parseInt(selectedCampground.id),
         campground_name: selectedCampground.name,
         checkin_date: checkin,
         checkout_date: checkout,
         site_type: siteType,
+        site_numbers: selectedSites.length > 0 ? selectedSites : null,
         alert_email: email
     };
     

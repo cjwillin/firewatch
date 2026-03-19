@@ -70,17 +70,80 @@ def search_campgrounds(
             return []
 
 
+@router.get("/{campground_id}/sites")
+def get_campground_sites(
+    campground_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get list of sites for a campground (for site selection UI).
+
+    Returns: [{"site_id": "42", "site_name": "Site 42", "site_type": "Standard"}, ...]
+    """
+    # Get campground info
+    campground = db.query(Campground).filter(
+        Campground.recreation_id == campground_id
+    ).first()
+
+    if not campground:
+        raise HTTPException(status_code=404, detail="Campground not found")
+
+    client = RecreationClient()
+
+    try:
+        # Fetch current month's data to get site list
+        from datetime import datetime
+        month_start = datetime.now().replace(day=1)
+        month_param = month_start.strftime("%Y-%m-%dT00:00:00.000Z")
+
+        url = f"{client.BASE_URL}/api/camps/availability/campground/{campground_id}/month?start_date={month_param}"
+        headers = {"User-Agent": client.USER_AGENT}
+
+        data = client._retry_request(url, headers)
+        if not data:
+            return []
+
+        campsites = data.get("campsites", {})
+        if not campsites:
+            return []
+
+        # Format site list
+        sites = []
+        for site_id, site_data in campsites.items():
+            sites.append({
+                "site_id": site_id,
+                "site_name": site_data.get("campsite_name", f"Site {site_id}"),
+                "site_type": site_data.get("campsite_type", "Unknown")
+            })
+
+        # Sort by site ID (numeric if possible)
+        sites.sort(key=lambda s: int(s["site_id"]) if s["site_id"].isdigit() else s["site_id"])
+
+        return sites
+
+    except Exception as e:
+        logger.error(f"Failed to fetch sites for campground {campground_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch site list: {str(e)[:200]}"
+        )
+
+    finally:
+        client.close()
+
+
 @router.get("/{campground_id}/availability")
 def check_availability(
     campground_id: str,
     checkin: date = Query(..., description="Check-in date (YYYY-MM-DD)"),
     checkout: date = Query(..., description="Check-out date (YYYY-MM-DD)"),
     site_type: Optional[str] = Query(default="Any", description="Site type filter"),
+    site_numbers: Optional[str] = Query(default=None, description="Comma-separated site IDs (e.g., '15,23,42')"),
     db: Session = Depends(get_db)
 ):
     """
     Check real-time availability with date-by-date breakdown.
-    
+
     Returns:
     {
         "campground": {...},
@@ -98,29 +161,38 @@ def check_availability(
     # Validate dates
     if checkout <= checkin:
         raise HTTPException(status_code=400, detail="Checkout must be after checkin")
-    
+
+    # Parse site_numbers if provided
+    site_numbers_list = None
+    if site_numbers:
+        try:
+            site_numbers_list = [int(s.strip()) for s in site_numbers.split(',') if s.strip()]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid site_numbers format")
+
     # Get campground info
     campground = db.query(Campground).filter(
         Campground.recreation_id == campground_id
     ).first()
-    
+
     if not campground:
         raise HTTPException(status_code=404, detail="Campground not found")
-    
+
     # Check availability
     client = RecreationClient()
-    
+
     try:
         # Get detailed availability from Recreation.gov
         availability_data = client.check_availability_detailed(
             campground_id=int(campground_id),
             checkin_date=checkin,
             checkout_date=checkout,
-            site_type=site_type
+            site_type=site_type,
+            site_numbers=site_numbers_list
         )
-        
+
         booking_url = client.get_booking_url(int(campground_id), checkin, checkout)
-        
+
         return {
             "campground": campground.to_dict(),
             "date_range": {
@@ -132,13 +204,13 @@ def check_availability(
             "booking_url": booking_url,
             "has_availability": availability_data["has_availability"]
         }
-    
+
     except Exception as e:
         logger.error(f"Availability check failed for campground {campground_id}: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to check availability: {str(e)[:200]}"
         )
-    
+
     finally:
         client.close()
