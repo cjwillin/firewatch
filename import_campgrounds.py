@@ -7,6 +7,7 @@ Run with: python import_campgrounds.py
 import httpx
 import time
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from database import SessionLocal, engine
 from models import Campground, Base
 from datetime import datetime
@@ -29,7 +30,7 @@ def fetch_and_import_campgrounds(db):
     print("Fetching campgrounds from Recreation.gov...")
 
     # Get existing IDs to avoid duplicates
-    existing_ids = {r[0] for r in db.execute("SELECT recreation_id FROM campgrounds").fetchall()}
+    existing_ids = {r[0] for r in db.execute(text("SELECT recreation_id FROM campgrounds")).fetchall()}
     print(f"Database has {len(existing_ids)} existing campgrounds")
 
     # Search with wildcard to get all campgrounds
@@ -148,13 +149,13 @@ if __name__ == "__main__":
 
         # Test FTS search
         print("\nTesting FTS search...")
-        result = db.execute("""
+        result = db.execute(text("""
             SELECT c.recreation_id, c.name, c.city, c.state
             FROM campgrounds_fts f
             JOIN campgrounds c ON f.rowid = c.id
             WHERE campgrounds_fts MATCH 'yosemite'
             LIMIT 5
-        """).fetchall()
+        """)).fetchall()
 
         total_count = db.query(Campground).count()
         print(f"\nTotal campgrounds in database: {total_count}")
