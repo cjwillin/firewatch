@@ -17,6 +17,45 @@
         .status-paused { background-color: #6b7280; }
         .status-alerted { background-color: #3b82f6; }
         .status-error { background-color: #ef4444; }
+
+        /* Autocomplete styles */
+        .autocomplete {
+            position: relative;
+        }
+        .autocomplete-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 10;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .autocomplete-item {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .autocomplete-item:hover {
+            background-color: #f9fafb;
+        }
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+        .autocomplete-item-name {
+            font-weight: 500;
+            color: #111827;
+        }
+        .autocomplete-item-location {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -101,14 +140,19 @@
         <div class="bg-white rounded-lg max-w-md w-full p-6">
             <h3 class="text-lg font-semibold mb-4">Create New Watch</h3>
             <form id="createWatchForm" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Campground ID</label>
-                    <input type="number" name="campground_id" required class="w-full border rounded-lg px-3 py-2">
-                    <p class="text-xs text-gray-500 mt-1">From Recreation.gov URL (e.g., 232447)</p>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Campground Name</label>
-                    <input type="text" name="campground_name" required class="w-full border rounded-lg px-3 py-2">
+                <div class="autocomplete">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Search Campground</label>
+                    <input
+                        type="text"
+                        id="campgroundSearch"
+                        placeholder="Type to search campgrounds..."
+                        autocomplete="off"
+                        required
+                        class="w-full border rounded-lg px-3 py-2">
+                    <div id="campgroundResults" class="autocomplete-results hidden"></div>
+                    <input type="hidden" name="campground_id" id="selectedCampgroundId" required>
+                    <input type="hidden" name="campground_name" id="selectedCampgroundName" required>
+                    <p class="text-xs text-gray-500 mt-1" id="selectedCampgroundDisplay"></p>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>

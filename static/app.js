@@ -336,9 +336,98 @@ function switchTab(tab) {
     if (tab === 'logs') loadLogs();
 }
 
+// Campground autocomplete
+let searchTimeout;
+let selectedCampground = null;
+
+async function searchCampgrounds(query) {
+    if (query.length < 2) {
+        document.getElementById('campgroundResults').classList.add('hidden');
+        return;
+    }
+
+    try {
+        const results = await apiFetch(`${API_BASE}/campgrounds/search?q=${encodeURIComponent(query)}&limit=10`);
+        const resultsContainer = document.getElementById('campgroundResults');
+
+        if (results.length === 0) {
+            resultsContainer.innerHTML = '<div class="autocomplete-item text-gray-500">No campgrounds found</div>';
+            resultsContainer.classList.remove('hidden');
+            return;
+        }
+
+        resultsContainer.innerHTML = results.map(campground => `
+            <div class="autocomplete-item" data-id="${campground.id}" data-name="${campground.name}" data-location="${campground.location}">
+                <div class="autocomplete-item-name">${campground.name}</div>
+                <div class="autocomplete-item-location">${campground.location}</div>
+            </div>
+        `).join('');
+
+        // Add click handlers
+        resultsContainer.querySelectorAll('.autocomplete-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const id = item.getAttribute('data-id');
+                const name = item.getAttribute('data-name');
+                const location = item.getAttribute('data-location');
+
+                selectCampground(id, name, location);
+            });
+        });
+
+        resultsContainer.classList.remove('hidden');
+    } catch (err) {
+        console.error('Search failed:', err);
+    }
+}
+
+function selectCampground(id, name, location) {
+    selectedCampground = { id, name, location };
+
+    // Update form
+    document.getElementById('selectedCampgroundId').value = id;
+    document.getElementById('selectedCampgroundName').value = name;
+    document.getElementById('campgroundSearch').value = name;
+    document.getElementById('selectedCampgroundDisplay').textContent = `Selected: ${name} (${location})`;
+
+    // Hide results
+    document.getElementById('campgroundResults').classList.add('hidden');
+}
+
+// Initialize autocomplete when modal opens
+function initCampgroundSearch() {
+    const searchInput = document.getElementById('campgroundSearch');
+
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            searchCampgrounds(e.target.value);
+        }, 300); // Debounce 300ms
+    });
+
+    // Hide results when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.autocomplete')) {
+            document.getElementById('campgroundResults').classList.add('hidden');
+        }
+    });
+
+    // Clear selection when input is manually changed
+    searchInput.addEventListener('focus', () => {
+        if (selectedCampground && searchInput.value === selectedCampground.name) {
+            // Don't clear if they're refocusing on already-selected campground
+        } else {
+            selectedCampground = null;
+            document.getElementById('selectedCampgroundId').value = '';
+            document.getElementById('selectedCampgroundName').value = '';
+            document.getElementById('selectedCampgroundDisplay').textContent = '';
+        }
+    });
+}
+
 // Modal management
 function showCreateWatchModal() {
     document.getElementById('createWatchModal').classList.remove('hidden');
+    initCampgroundSearch();
 }
 
 function hideCreateWatchModal() {
