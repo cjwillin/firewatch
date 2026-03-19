@@ -35,39 +35,6 @@ def set_wal_mode(dbapi_conn, connection_record):
     cursor.close()
 
 
-# Create indexes after tables are created
-@event.listens_for(engine, "connect")
-def create_indexes(dbapi_conn, connection_record):
-    """Create performance indexes (from eng review)."""
-    cursor = dbapi_conn.cursor()
-
-    # Index for scheduler query: WHERE active=true AND alerted=false
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_watches_active_alerted
-        ON watches(active, alerted)
-    """)
-
-    # Index for alert log lookups
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_alert_log_watch_id
-        ON alert_log(watch_id)
-    """)
-
-    # Index for availability window lookups
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_availability_window_site
-        ON availability_window(campground_id, site_id)
-    """)
-
-    # Index for template expansion deduplication
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_watches_campground_dates
-        ON watches(campground_id, checkin_date, checkout_date)
-    """)
-
-    cursor.close()
-
-
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
