@@ -22,7 +22,7 @@ import logging
 
 from database import engine, Base
 from scheduler import start_scheduler, shutdown_scheduler
-from routers import watches, templates, admin
+from routers import watches, templates, admin, campgrounds
 
 # Logging setup
 logging.basicConfig(
@@ -93,6 +93,7 @@ async def api_key_middleware(request: Request, call_next):
 app.include_router(watches.router)
 app.include_router(templates.router)
 app.include_router(admin.router)
+app.include_router(campgrounds.router)
 
 
 # Scheduler lifecycle management
@@ -151,6 +152,7 @@ def api_info():
         "endpoints": {
             "watches": "/api/watches",
             "templates": "/api/templates",
+            "campgrounds": "/api/campgrounds/search",
             "health": "/api/health",
             "logs": "/api/logs"
         }
