@@ -17,7 +17,7 @@
         .status-paused { background-color: #6b7280; }
         .status-alerted { background-color: #3b82f6; }
         .status-error { background-color: #ef4444; }
-
+        
         /* Autocomplete styles */
         .autocomplete {
             position: relative;
@@ -31,7 +31,7 @@
             border: 1px solid #e5e7eb;
             border-top: none;
             border-radius: 0 0 0.5rem 0.5rem;
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
             z-index: 10;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -40,12 +40,24 @@
             padding: 0.75rem 1rem;
             cursor: pointer;
             border-bottom: 1px solid #f3f4f6;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
         .autocomplete-item:hover {
             background-color: #f9fafb;
         }
         .autocomplete-item:last-child {
             border-bottom: none;
+        }
+        .autocomplete-item img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 0.375rem;
+        }
+        .autocomplete-item-details {
+            flex: 1;
         }
         .autocomplete-item-name {
             font-weight: 500;
@@ -55,6 +67,98 @@
             font-size: 0.875rem;
             color: #6b7280;
             margin-top: 0.25rem;
+        }
+        
+        /* Calendar styles */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0.5rem;
+        }
+        .calendar-day {
+            padding: 0.75rem;
+            text-align: center;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .calendar-day-header {
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+        .calendar-day-disabled {
+            background-color: #f9fafb;
+            color: #d1d5db;
+            cursor: not-allowed;
+        }
+        .calendar-day-available {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 2px solid #10b981;
+        }
+        .calendar-day-available:hover {
+            background-color: #a7f3d0;
+        }
+        .calendar-day-sold-out {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 2px solid #ef4444;
+        }
+        .calendar-day-loading {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 2px solid #f59e0b;
+        }
+        
+        /* Progress steps */
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .step-inactive .step-number {
+            background-color: #e5e7eb;
+            color: #9ca3af;
+        }
+        .step-active .step-number {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .step-complete .step-number {
+            background-color: #10b981;
+            color: white;
+        }
+        .step-line {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            right: -50%;
+            height: 2px;
+            background-color: #e5e7eb;
+            z-index: -1;
+        }
+        .step-complete .step-line {
+            background-color: #10b981;
         }
     </style>
 </head>
@@ -76,202 +180,113 @@
     </header>
 
     <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Quick Actions -->
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Search Flow -->
         <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-lg font-semibold text-gray-900">Active Watches</h2>
-                    <p class="text-sm text-gray-500 mt-1">Monitoring <span id="activeCount" class="font-medium">0</span> campgrounds</p>
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Find Your Campsite</h2>
+            <p class="text-gray-500 mb-6">Search for campgrounds, check availability, and set up alerts for sold-out dates.</p>
+            
+            <!-- Progress Steps -->
+            <div class="step-indicator mb-8">
+                <div class="step step-active" id="step1">
+                    <div class="step-number">1</div>
+                    <div class="text-xs font-medium">Search</div>
+                    <div class="step-line"></div>
                 </div>
-                <button onclick="showCreateWatchModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-                    + New Watch
+                <div class="step step-inactive" id="step2">
+                    <div class="step-number">2</div>
+                    <div class="text-xs font-medium">Dates</div>
+                    <div class="step-line"></div>
+                </div>
+                <div class="step step-inactive" id="step3">
+                    <div class="step-number">3</div>
+                    <div class="text-xs font-medium">Availability</div>
+                </div>
+            </div>
+
+            <!-- Step 1: Search Campground -->
+            <div id="searchStep" class="search-step">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Search for a Campground</label>
+                <div class="autocomplete">
+                    <input
+                        type="text"
+                        id="campgroundSearch"
+                        placeholder="Type campground name (e.g., Yosemite, Kirk Creek)..."
+                        autocomplete="off"
+                        class="w-full border-2 rounded-lg px-4 py-3 text-lg focus:border-blue-500 focus:outline-none">
+                    <div id="searchResults" class="autocomplete-results hidden"></div>
+                </div>
+            </div>
+
+            <!-- Step 2: Enter Dates -->
+            <div id="datesStep" class="hidden">
+                <div class="mb-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <img id="selectedCampgroundImage" src="" class="w-16 h-16 rounded-lg object-cover" style="display: none;">
+                        <div>
+                            <h3 class="font-semibold text-lg" id="selectedCampgroundName"></h3>
+                            <p class="text-sm text-gray-500" id="selectedCampgroundLocation"></p>
+                        </div>
+                    </div>
+                    <button onclick="backToSearch()" class="text-sm text-blue-600 hover:underline">← Change campground</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Check-in Date</label>
+                        <input type="date" id="checkinDate" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Check-out Date</label>
+                        <input type="date" id="checkoutDate" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Site Type</label>
+                    <select id="siteType" class="w-full border rounded-lg px-3 py-2">
+                        <option value="Any">Any</option>
+                        <option value="Standard">Standard</option>
+                        <option value="Electric">Electric</option>
+                        <option value="Full Hookup">Full Hookup</option>
+                        <option value="Group">Group</option>
+                    </select>
+                </div>
+
+                <button onclick="checkAvailability()" class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold">
+                    Check Availability →
                 </button>
+            </div>
+
+            <!-- Step 3: Availability Results -->
+            <div id="availabilityStep" class="hidden">
+                <div class="mb-4">
+                    <button onclick="backToDates()" class="text-sm text-blue-600 hover:underline">← Change dates</button>
+                </div>
+
+                <div id="availabilityLoading" class="text-center py-8">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p class="text-gray-600 mt-2">Checking availability...</p>
+                </div>
+
+                <div id="availabilityResults" class="hidden">
+                    <!-- Results will be injected here -->
+                </div>
             </div>
         </div>
 
-        <!-- Tabs -->
-        <div class="bg-white rounded-lg shadow-sm mb-6">
-            <div class="border-b">
-                <nav class="flex">
-                    <button onclick="switchTab('watches')" id="tab-watches" class="tab-button active">
-                        Watches
-                    </button>
-                    <button onclick="switchTab('templates')" id="tab-templates" class="tab-button">
-                        Templates
-                    </button>
-                    <button onclick="switchTab('logs')" id="tab-logs" class="tab-button">
-                        Alert Logs
-                    </button>
-                </nav>
+        <!-- My Watches Section -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">My Watches</h2>
+                <span class="text-sm text-gray-500"><span id="activeCount">0</span> active</span>
             </div>
-
-            <!-- Watches Tab -->
-            <div id="content-watches" class="tab-content p-6">
-                <div id="watchesList" class="space-y-4">
-                    <!-- Watches will be loaded here -->
-                    <div class="text-center text-gray-500 py-8">Loading watches...</div>
-                </div>
-            </div>
-
-            <!-- Templates Tab -->
-            <div id="content-templates" class="tab-content p-6 hidden">
-                <div class="mb-4">
-                    <button onclick="showCreateTemplateModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
-                        + New Template
-                    </button>
-                </div>
-                <div id="templatesList" class="space-y-4">
-                    <div class="text-center text-gray-500 py-8">Loading templates...</div>
-                </div>
-            </div>
-
-            <!-- Logs Tab -->
-            <div id="content-logs" class="tab-content p-6 hidden">
-                <div id="logsList" class="space-y-3">
-                    <div class="text-center text-gray-500 py-8">Loading logs...</div>
-                </div>
+            <div id="watchesList">
+                <div class="text-center text-gray-500 py-4 text-sm">No watches yet</div>
             </div>
         </div>
     </main>
 
-    <!-- Create Watch Modal -->
-    <div id="createWatchModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 class="text-lg font-semibold mb-4">Create New Watch</h3>
-            <form id="createWatchForm" class="space-y-4">
-                <div class="autocomplete">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Search Campground</label>
-                    <input
-                        type="text"
-                        id="campgroundSearch"
-                        placeholder="Type to search campgrounds..."
-                        autocomplete="off"
-                        required
-                        class="w-full border rounded-lg px-3 py-2">
-                    <div id="campgroundResults" class="autocomplete-results hidden"></div>
-                    <input type="hidden" name="campground_id" id="selectedCampgroundId" required>
-                    <input type="hidden" name="campground_name" id="selectedCampgroundName" required>
-                    <p class="text-xs text-gray-500 mt-1" id="selectedCampgroundDisplay"></p>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Check-in</label>
-                        <input type="date" name="checkin_date" required class="w-full border rounded-lg px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Check-out</label>
-                        <input type="date" name="checkout_date" required class="w-full border rounded-lg px-3 py-2">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Site Type</label>
-                    <select name="site_type" required class="w-full border rounded-lg px-3 py-2">
-                        <option value="Any">Any</option>
-                        <option value="Standard">Standard</option>
-                        <option value="Electric">Electric</option>
-                        <option value="Full Hookup">Full Hookup</option>
-                        <option value="Group">Group</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Alert Email</label>
-                    <input type="email" name="alert_email" required class="w-full border rounded-lg px-3 py-2">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Pushover Key (optional)</label>
-                    <input type="text" name="pushover_key" class="w-full border rounded-lg px-3 py-2">
-                </div>
-                <div class="flex gap-3 pt-4">
-                    <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                        Create Watch
-                    </button>
-                    <button type="button" onclick="hideCreateWatchModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300">
-                        Cancel
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Create Template Modal -->
-    <div id="createTemplateModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 class="text-lg font-semibold mb-4">Create New Template</h3>
-            <form id="createTemplateForm" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Campground ID</label>
-                    <input type="number" name="campground_id" required class="w-full border rounded-lg px-3 py-2">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Campground Name</label>
-                    <input type="text" name="campground_name" required class="w-full border rounded-lg px-3 py-2">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                        <input type="date" name="date_range_start" required class="w-full border rounded-lg px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                        <input type="date" name="date_range_end" required class="w-full border rounded-lg px-3 py-2">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Days of Week</label>
-                    <div class="grid grid-cols-7 gap-2">
-                        <label class="text-center"><input type="checkbox" value="0" class="days-of-week mb-1"><br><span class="text-xs">Mon</span></label>
-                        <label class="text-center"><input type="checkbox" value="1" class="days-of-week mb-1"><br><span class="text-xs">Tue</span></label>
-                        <label class="text-center"><input type="checkbox" value="2" class="days-of-week mb-1"><br><span class="text-xs">Wed</span></label>
-                        <label class="text-center"><input type="checkbox" value="3" class="days-of-week mb-1"><br><span class="text-xs">Thu</span></label>
-                        <label class="text-center"><input type="checkbox" value="4" class="days-of-week mb-1"><br><span class="text-xs">Fri</span></label>
-                        <label class="text-center"><input type="checkbox" value="5" class="days-of-week mb-1"><br><span class="text-xs">Sat</span></label>
-                        <label class="text-center"><input type="checkbox" value="6" class="days-of-week mb-1"><br><span class="text-xs">Sun</span></label>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Site Type</label>
-                    <select name="site_type" required class="w-full border rounded-lg px-3 py-2">
-                        <option value="Any">Any</option>
-                        <option value="Standard">Standard</option>
-                        <option value="Electric">Electric</option>
-                        <option value="Full Hookup">Full Hookup</option>
-                        <option value="Group">Group</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Alert Email</label>
-                    <input type="email" name="alert_email" required class="w-full border rounded-lg px-3 py-2">
-                </div>
-                <div class="flex gap-3 pt-4">
-                    <button type="submit" class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
-                        Create Template
-                    </button>
-                    <button type="button" onclick="hideCreateTemplateModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300">
-                        Cancel
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script src="/static/app.js"></script>
-
-    <style>
-        .tab-button {
-            padding: 1rem 1.5rem;
-            font-medium;
-            border-bottom: 2px solid transparent;
-            color: #6b7280;
-            transition: all 0.2s;
-        }
-        .tab-button:hover {
-            color: #111827;
-        }
-        .tab-button.active {
-            color: #3b82f6;
-            border-bottom-color: #3b82f6;
-        }
-    </style>
+    <script src="app_new.js"></script>
 </body>
 </html>

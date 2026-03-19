@@ -219,3 +219,34 @@ class AvailabilityWindow(Base):
 
     # duration_seconds is computed as (last_seen - first_seen).total_seconds()
     # Not stored in DB, calculated in application logic
+
+
+class Campground(Base):
+    """
+    Local cache of Recreation.gov campgrounds for fast FTS search.
+    
+    Synced from Recreation.gov API. FTS triggers in Alembic migration.
+    """
+    __tablename__ = "campgrounds"
+    
+    id = Column(Integer, primary_key=True)
+    recreation_id = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    city = Column(String)
+    state = Column(String)
+    latitude = Column(Integer)  # Stored as int (e.g., 37.84883 → 37848830)
+    longitude = Column(Integer)  # Stored as int (e.g., -119.55718 → -119557180)
+    preview_image_url = Column(String)
+    description = Column(Text)
+    last_synced = Column(DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        """Convert to API response format."""
+        return {
+            "id": self.recreation_id,
+            "name": self.name,
+            "location": f"{self.city or ''}, {self.state or ''}".strip(", "),
+            "latitude": self.latitude / 100000 if self.latitude else None,
+            "longitude": self.longitude / 100000 if self.longitude else None,
+            "preview_image_url": self.preview_image_url,
+        }

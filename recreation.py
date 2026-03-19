@@ -255,6 +255,113 @@ class RecreationClient:
 
         return available_sites
 
+    def check_availability_detailed(
+        self,
+        campground_id: int,
+        checkin_date: date,
+        checkout_date: date,
+        site_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Check availability with date-by-date breakdown for calendar UI.
+
+        Returns:
+        {
+            "availability": {
+                "2026-07-01": {"status": "available", "sites_count": 5},
+                "2026-07-02": {"status": "sold_out", "sites_count": 0},
+                ...
+            },
+            "available_sites": [{site_id, site_name, site_type, available_dates}, ...],
+            "has_availability": bool
+        }
+        """
+        # Fetch raw data from Recreation.gov
+        month_start = checkin_date.replace(day=1)
+        month_param = month_start.strftime("%Y-%m-%dT00:00:00.000Z")
+
+        url = f"{self.BASE_URL}/api/camps/availability/campground/{campground_id}/month?start_date={month_param}"
+        headers = {"User-Agent": self.USER_AGENT}
+
+        data = self._retry_request(url, headers)
+        if not data:
+            return {
+                "availability": {},
+                "available_sites": [],
+                "has_availability": False
+            }
+
+        campsites = data.get("campsites", {})
+        if not campsites:
+            return {
+                "availability": {},
+                "available_sites": [],
+                "has_availability": False
+            }
+
+        # Build date-by-date availability map
+        date_availability = {}
+        available_sites_list = []
+
+        # Initialize all dates in range as sold out
+        current_date = checkin_date
+        while current_date < checkout_date:
+            date_availability[current_date.isoformat()] = {
+                "status": "sold_out",
+                "sites_count": 0
+            }
+            current_date += timedelta(days=1)
+
+        # Process each site
+        for site_id, site_data in campsites.items():
+            # Filter by site_type if not "Any"
+            if site_type and site_type != "Any":
+                campsite_type = site_data.get("campsite_type", "").upper()
+                if site_type.upper().replace(" ", "") not in campsite_type.replace(" ", ""):
+                    continue
+
+            availabilities = site_data.get("availabilities", {})
+            site_available_dates = []
+
+            # Check each date in our range
+            for avail_date_str, status in availabilities.items():
+                try:
+                    avail_date = datetime.fromisoformat(avail_date_str.replace("Z", "+00:00")).date()
+
+                    # Only consider dates in our range
+                    if checkin_date <= avail_date < checkout_date:
+                        if status in ["Available", "Open"]:
+                            # Update date availability count
+                            date_str = avail_date.isoformat()
+                            if date_str in date_availability:
+                                date_availability[date_str]["status"] = "available"
+                                date_availability[date_str]["sites_count"] += 1
+
+                            site_available_dates.append(date_str)
+
+                except (ValueError, AttributeError):
+                    continue
+
+            # If site has any availability in our range, add it to results
+            if site_available_dates:
+                available_sites_list.append({
+                    "site_id": site_id,
+                    "site_name": site_data.get("campsite_name", f"Site {site_id}"),
+                    "site_type": site_data.get("campsite_type", "Unknown"),
+                    "available_dates": site_available_dates
+                })
+
+        has_availability = any(
+            day["status"] == "available"
+            for day in date_availability.values()
+        )
+
+        return {
+            "availability": date_availability,
+            "available_sites": available_sites_list,
+            "has_availability": has_availability
+        }
+
     def search_campgrounds(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Search for campgrounds by name.
