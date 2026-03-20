@@ -9,6 +9,7 @@ const API_KEY = localStorage.getItem('firewatch_api_key') || '';
 // State
 let selectedCampground = null;
 let searchTimeout = null;
+let availabilityData = null;
 
 // Fetch wrapper
 async function apiFetch(url, options = {}) {
@@ -149,7 +150,20 @@ function selectCampground(campground) {
     document.getElementById('selectedName').textContent = campground.name;
     document.getElementById('selectedLocation').textContent = campground.location;
 
+    // Reset availability
+    hideAvailability();
+
     loadCampgroundSites(campground.id);
+
+    // Add site type change listener
+    const siteTypeSelect = document.getElementById('siteType');
+    siteTypeSelect.addEventListener('change', () => {
+        const checkin = document.getElementById('checkinDate').value;
+        const checkout = document.getElementById('checkoutDate').value;
+        if (checkin && checkout) {
+            checkAvailability();
+        }
+    });
 }
 
 async function loadCampgroundSites(campgroundId) {
@@ -175,6 +189,17 @@ async function loadCampgroundSites(campgroundId) {
             </label>
         `).join('');
 
+        // Add change listeners to checkboxes
+        document.querySelectorAll('.site-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                const checkin = document.getElementById('checkinDate').value;
+                const checkout = document.getElementById('checkoutDate').value;
+                if (checkin && checkout) {
+                    checkAvailability();
+                }
+            });
+        });
+
         loadingEl.classList.add('hidden');
         containerEl.classList.remove('hidden');
 
@@ -186,10 +211,20 @@ async function loadCampgroundSites(campgroundId) {
 
 function selectAllSites() {
     document.querySelectorAll('.site-checkbox').forEach(cb => cb.checked = true);
+    const checkin = document.getElementById('checkinDate').value;
+    const checkout = document.getElementById('checkoutDate').value;
+    if (checkin && checkout) {
+        checkAvailability();
+    }
 }
 
 function clearAllSites() {
     document.querySelectorAll('.site-checkbox').forEach(cb => cb.checked = false);
+    const checkin = document.getElementById('checkinDate').value;
+    const checkout = document.getElementById('checkoutDate').value;
+    if (checkin && checkout) {
+        checkAvailability();
+    }
 }
 
 function getSelectedSites() {
@@ -199,9 +234,11 @@ function getSelectedSites() {
 
 function backToSearch() {
     selectedCampground = null;
+    availabilityData = null;
     document.getElementById('detailsForm').classList.add('hidden');
     document.getElementById('campgroundSearch').value = '';
     document.getElementById('campgroundSearch').focus();
+    hideAvailability();
 }
 
 function showSearch() {
@@ -212,24 +249,197 @@ function showSearch() {
 function initializeDateInputs() {
     const checkinInput = document.getElementById('checkinDate');
     const checkoutInput = document.getElementById('checkoutDate');
-    
+
     const today = new Date().toISOString().split('T')[0];
     checkinInput.min = today;
     checkoutInput.min = today;
-    
+
     checkinInput.addEventListener('change', () => {
         const checkin = new Date(checkinInput.value);
         checkin.setDate(checkin.getDate() + 1);
         checkoutInput.min = checkin.toISOString().split('T')[0];
-        
+
         if (checkoutInput.value && new Date(checkoutInput.value) <= new Date(checkinInput.value)) {
             checkoutInput.value = '';
+            hideAvailability();
+        } else if (checkoutInput.value) {
+            checkAvailability();
+        }
+    });
+
+    checkoutInput.addEventListener('change', () => {
+        if (checkinInput.value && checkoutInput.value) {
+            checkAvailability();
         }
     });
 }
 
-// Create watch
-async function createWatch() {
+// Check availability and show results
+async function checkAvailability() {
+    if (!selectedCampground) return;
+
+    const checkin = document.getElementById('checkinDate').value;
+    const checkout = document.getElementById('checkoutDate').value;
+    const siteType = document.getElementById('siteType').value;
+    const selectedSites = getSelectedSites();
+
+    if (!checkin || !checkout) return;
+
+    // Show loading state
+    const availabilityContainer = document.getElementById('availabilityResults');
+    availabilityContainer.classList.remove('hidden');
+    availabilityContainer.innerHTML = '<div class="loading">Checking availability...</div>';
+
+    try {
+        // Build query params
+        const params = new URLSearchParams({
+            checkin: checkin,
+            checkout: checkout,
+            site_type: siteType || 'Any'
+        });
+
+        if (selectedSites.length > 0) {
+            params.set('site_numbers', selectedSites.join(','));
+        }
+
+        const data = await apiFetch(`${API_BASE}/campgrounds/${selectedCampground.id}/availability?${params}`);
+        availabilityData = data;
+
+        renderAvailabilityResults(data);
+
+    } catch (err) {
+        console.error('Availability check failed:', err);
+        availabilityContainer.innerHTML = `
+            <div class="availability-error">
+                <p><strong>Failed to check availability</strong></p>
+                <p style="font-size: 13px; color: #78716c; margin-top: 4px;">${err.message}</p>
+            </div>
+        `;
+    }
+}
+
+function hideAvailability() {
+    const availabilityContainer = document.getElementById('availabilityResults');
+    availabilityContainer.classList.add('hidden');
+    availabilityData = null;
+}
+
+function renderAvailabilityResults(data) {
+    const container = document.getElementById('availabilityResults');
+    const hasAvailability = data.has_availability;
+
+    // Calculate total nights
+    const checkinDate = new Date(data.date_range.checkin);
+    const checkoutDate = new Date(data.date_range.checkout);
+    const nights = Math.ceil((checkoutDate - checkinDate) / (1000 * 60 * 60 * 24));
+
+    // Build calendar view
+    const availabilityDates = Object.keys(data.availability).sort();
+    const calendarHTML = availabilityDates.map(dateStr => {
+        const dayData = data.availability[dateStr];
+        const date = new Date(dateStr);
+        const dayNum = date.getDate();
+        const monthShort = date.toLocaleDateString('en-US', { month: 'short' });
+
+        const statusClass = dayData.status === 'available' ? 'day-available' : 'day-sold-out';
+
+        return `
+            <div class="calendar-day-large ${statusClass}">
+                <div class="day-header">${monthShort} ${dayNum}</div>
+                <div class="day-sites">${dayData.sites_count} ${dayData.sites_count === 1 ? 'site' : 'sites'}</div>
+            </div>
+        `;
+    }).join('');
+
+    if (hasAvailability) {
+        // Show available sites and booking option
+        const sitesHTML = data.available_sites.map(site => `
+            <div class="available-site">
+                <div class="site-name">${site.site_name}</div>
+                <div class="site-type">${site.site_type}</div>
+                <div class="site-dates">${site.available_dates.length} night${site.available_dates.length !== 1 ? 's' : ''} available</div>
+            </div>
+        `).join('');
+
+        container.innerHTML = `
+            <div class="availability-results">
+                <div class="availability-header success">
+                    <div class="availability-icon">✓</div>
+                    <div>
+                        <div class="availability-title">Sites Available!</div>
+                        <div class="availability-subtitle">${data.available_sites.length} ${data.available_sites.length === 1 ? 'site' : 'sites'} found for ${nights} ${nights === 1 ? 'night' : 'nights'}</div>
+                    </div>
+                </div>
+
+                <div class="availability-calendar">
+                    ${calendarHTML}
+                </div>
+
+                <div class="available-sites-list">
+                    <h4>Available Sites</h4>
+                    ${sitesHTML}
+                </div>
+
+                <div class="availability-actions">
+                    <a href="${data.booking_url}" target="_blank" class="btn btn-primary" style="text-decoration: none;">
+                        Book Now on Recreation.gov →
+                    </a>
+                    <button onclick="showWatchOption()" class="btn btn-secondary">
+                        Watch for More Availability
+                    </button>
+                </div>
+            </div>
+        `;
+    } else {
+        // Show sold out state with watch option
+        container.innerHTML = `
+            <div class="availability-results">
+                <div class="availability-header sold-out">
+                    <div class="availability-icon">✗</div>
+                    <div>
+                        <div class="availability-title">Sold Out</div>
+                        <div class="availability-subtitle">No sites available for ${nights} ${nights === 1 ? 'night' : 'nights'}</div>
+                    </div>
+                </div>
+
+                <div class="availability-calendar">
+                    ${calendarHTML}
+                </div>
+
+                <div class="watch-prompt">
+                    <p><strong>Want to be notified if sites become available?</strong></p>
+                    <p style="font-size: 14px; color: #78716c; margin-top: 8px;">
+                        We'll check every 5 minutes and email you when a site opens up.
+                    </p>
+                </div>
+
+                <div class="availability-actions">
+                    <button onclick="promptCreateWatch()" class="btn btn-primary" style="width: 100%;">
+                        Create Availability Watch
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
+
+function showWatchOption() {
+    // User clicked "Watch for More Availability" even though sites exist
+    promptCreateWatch();
+}
+
+async function promptCreateWatch() {
+    const email = prompt('Enter your email for availability alerts:');
+    if (!email || !email.includes('@')) {
+        alert('Valid email required');
+        return;
+    }
+
+    await createWatchWithEmail(email);
+}
+
+// Create watch with email
+async function createWatchWithEmail(email) {
     const checkin = document.getElementById('checkinDate').value;
     const checkout = document.getElementById('checkoutDate').value;
     const siteType = document.getElementById('siteType').value;
@@ -245,12 +455,6 @@ async function createWatch() {
         return;
     }
 
-    const email = prompt('Enter your email for alerts:');
-    if (!email || !email.includes('@')) {
-        alert('Valid email required');
-        return;
-    }
-
     const watchData = {
         campground_id: parseInt(selectedCampground.id),
         campground_name: selectedCampground.name,
@@ -260,15 +464,15 @@ async function createWatch() {
         site_numbers: selectedSites.length > 0 ? selectedSites : null,
         alert_email: email
     };
-    
+
     try {
         await apiFetch(`${API_BASE}/watches`, {
             method: 'POST',
             body: JSON.stringify(watchData)
         });
-        
-        alert('Watch created! We\'ll check for availability and email you.');
-        
+
+        alert('Watch created! We\'ll check every 5 minutes and email you when sites become available.');
+
         backToSearch();
         loadWatches();
         updateStats();
