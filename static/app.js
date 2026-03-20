@@ -433,6 +433,11 @@ function renderMonthlyCalendar(data) {
     }
 
     container.innerHTML = calendarHTML;
+
+    // If we have a full date range selection, show detailed breakdown
+    if (selectedStartDate && selectedEndDate && data.sites_detail && data.sites_detail.length > 0) {
+        renderSitesDetailTable(data);
+    }
 }
 
 function checkRangeAvailability(startDate, endDate, data) {
@@ -526,6 +531,108 @@ async function createWatchForSelection() {
     } catch (err) {
         alert('Failed to create watch: ' + err.message);
     }
+}
+
+function renderSitesDetailTable(data) {
+    const container = document.getElementById('monthlyCalendar');
+
+    // Generate date headers for the selected range
+    const dateHeaders = [];
+    let currentDate = new Date(selectedStartDate);
+    while (currentDate < selectedEndDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+        const dayOfMonth = currentDate.getDate();
+        dateHeaders.push({ dateStr, dayOfWeek, dayOfMonth });
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    let tableHTML = `
+        <div class="sites-detail-container" style="margin-top: 24px;">
+            <h3 style="margin-bottom: 16px; font-size: 18px; font-weight: 600;">Availability Breakdown by Campsite</h3>
+            <div style="overflow-x: auto;">
+                <table class="sites-detail-table">
+                    <thead>
+                        <tr>
+                            <th class="sticky-col">Name</th>
+                            ${dateHeaders.map(h => `
+                                <th class="date-header">
+                                    <div>${h.dayOfWeek}</div>
+                                    <div>${h.dayOfMonth}</div>
+                                </th>
+                            `).join('')}
+                            <th>Loop</th>
+                            <th>Allowed</th>
+                            <th>Kind</th>
+                            <th>Trailer</th>
+                            <th>RV</th>
+                            <th>Vehicle</th>
+                            <th>Firepit</th>
+                            <th>Table</th>
+                            <th>Hookups</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+
+    // Sort sites by site_id
+    const sortedSites = [...data.sites_detail].sort((a, b) => {
+        const aNum = parseInt(a.site_id);
+        const bNum = parseInt(b.site_id);
+        if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+        return a.site_id.localeCompare(b.site_id);
+    });
+
+    for (const site of sortedSites) {
+        const attrs = site.attributes;
+        const allowed = [];
+        if (attrs.rv_allowed === 'Yes' || attrs.rv_allowed === true) allowed.push('Rv');
+        if (attrs.tent_allowed === 'Yes' || attrs.tent_allowed === true) allowed.push('Tent');
+        if (!allowed.length) allowed.push('Trailer');
+
+        tableHTML += `
+            <tr>
+                <td class="sticky-col site-name">${site.site_name}</td>
+                ${dateHeaders.map(h => {
+                    const status = site.daily_availability[h.dateStr] || 'NotBookable';
+                    let statusClass = 'reserved';
+                    let statusLabel = 'R';
+
+                    if (status === 'Available' || status === 'Open') {
+                        statusClass = 'available';
+                        statusLabel = 'A';
+                    } else if (status === 'Reserved') {
+                        statusClass = 'reserved';
+                        statusLabel = 'R';
+                    } else {
+                        statusClass = 'closed';
+                        statusLabel = 'C';
+                    }
+
+                    return `<td class="availability-cell ${statusClass}">${statusLabel}</td>`;
+                }).join('')}
+                <td class="site-attr">${site.loop !== 'Unknown' ? site.loop : '-'}</td>
+                <td class="site-attr">${allowed.join(', ')}</td>
+                <td class="site-attr">${site.site_type}</td>
+                <td class="site-attr">${attrs.trailer_length !== 'N/A' ? attrs.trailer_length : '-'}</td>
+                <td class="site-attr">${attrs.rv_length !== 'N/A' ? attrs.rv_length : '-'}</td>
+                <td class="site-attr">${attrs.vehicle_length !== 'N/A' ? attrs.vehicle_length : '-'}</td>
+                <td class="site-attr">${attrs.has_fire_pit === 'Yes' ? 'Y' : 'N'}</td>
+                <td class="site-attr">${attrs.has_table === 'Yes' ? 'Y' : 'N'}</td>
+                <td class="site-attr">${attrs.has_hookups === 'Yes' || attrs.has_hookups === 'Y' ? 'Y' : 'N'}</td>
+            </tr>
+        `;
+    }
+
+    tableHTML += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    // Append to the calendar container
+    container.innerHTML += tableHTML;
 }
 
 function prevMonth() {

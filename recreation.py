@@ -274,6 +274,7 @@ class RecreationClient:
                 ...
             },
             "available_sites": [{site_id, site_name, site_type, available_dates}, ...],
+            "sites_detail": [{site_id, site_name, site_type, loop, attributes, daily_availability}, ...],
             "has_availability": bool
         }
         """
@@ -289,6 +290,7 @@ class RecreationClient:
             return {
                 "availability": {},
                 "available_sites": [],
+                "sites_detail": [],
                 "has_availability": False
             }
 
@@ -297,12 +299,14 @@ class RecreationClient:
             return {
                 "availability": {},
                 "available_sites": [],
+                "sites_detail": [],
                 "has_availability": False
             }
 
         # Build date-by-date availability map
         date_availability = {}
         available_sites_list = []
+        sites_detail = []
 
         # Initialize all dates in range as sold out
         current_date = checkin_date
@@ -333,6 +337,7 @@ class RecreationClient:
 
             availabilities = site_data.get("availabilities", {})
             site_available_dates = []
+            daily_availability = {}
 
             # Check each date in our range
             for avail_date_str, status in availabilities.items():
@@ -341,9 +346,11 @@ class RecreationClient:
 
                     # Only consider dates in our range
                     if checkin_date <= avail_date < checkout_date:
+                        date_str = avail_date.isoformat()
+                        daily_availability[date_str] = status
+
                         if status in ["Available", "Open"]:
                             # Update date availability count
-                            date_str = avail_date.isoformat()
                             if date_str in date_availability:
                                 date_availability[date_str]["status"] = "available"
                                 date_availability[date_str]["sites_count"] += 1
@@ -353,7 +360,34 @@ class RecreationClient:
                 except (ValueError, AttributeError):
                     continue
 
-            # If site has any availability in our range, add it to results
+            # Extract site attributes
+            attributes = site_data.get("attributes", {})
+
+            # Build detailed site info
+            site_detail = {
+                "site_id": site_id,
+                "site_name": site_data.get("campsite_name", f"Site {site_id}"),
+                "site_type": site_data.get("campsite_type", "Unknown"),
+                "loop": site_data.get("loop", "Unknown"),
+                "attributes": {
+                    "max_people": attributes.get("MaxNumOfPeople", attributes.get("Max Num of People", "N/A")),
+                    "trailer_length": attributes.get("Max Trailer Length", attributes.get("Driveway Length", "N/A")),
+                    "rv_length": attributes.get("Max RV Length", "N/A"),
+                    "vehicle_length": attributes.get("Max Vehicle Length", "N/A"),
+                    "pets_allowed": attributes.get("Pets Allowed", "N/A"),
+                    "tent_allowed": "Yes" if "TENT" in site_data.get("campsite_type", "").upper() else "No",
+                    "rv_allowed": "Yes" if "RV" in site_data.get("campsite_type", "").upper() else "No",
+                    "has_fire_pit": attributes.get("Campfire Allowed", "N/A"),
+                    "has_table": attributes.get("Picnic Table", "N/A"),
+                    "has_hookups": attributes.get("Electric Hookup", "N/A"),
+                },
+                "daily_availability": daily_availability,
+                "has_availability": len(site_available_dates) > 0
+            }
+
+            sites_detail.append(site_detail)
+
+            # If site has any availability in our range, add it to available_sites summary
             if site_available_dates:
                 available_sites_list.append({
                     "site_id": site_id,
@@ -361,6 +395,9 @@ class RecreationClient:
                     "site_type": site_data.get("campsite_type", "Unknown"),
                     "available_dates": site_available_dates
                 })
+
+        # Sort sites_detail by site_id (numeric if possible)
+        sites_detail.sort(key=lambda s: int(s["site_id"]) if str(s["site_id"]).isdigit() else s["site_id"])
 
         has_availability = any(
             day["status"] == "available"
@@ -370,6 +407,7 @@ class RecreationClient:
         return {
             "availability": date_availability,
             "available_sites": available_sites_list,
+            "sites_detail": sites_detail,
             "has_availability": has_availability
         }
 

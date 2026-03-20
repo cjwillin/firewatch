@@ -201,6 +201,7 @@ def check_availability(
             },
             "availability": availability_data["availability"],
             "available_sites": availability_data["available_sites"],
+            "sites_detail": availability_data["sites_detail"],
             "booking_url": booking_url,
             "has_availability": availability_data["has_availability"]
         }
