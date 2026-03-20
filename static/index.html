@@ -4,308 +4,608 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Firewatch - Campsite Availability Monitor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        .status-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 6px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .status-active { background-color: #10b981; }
-        .status-paused { background-color: #6b7280; }
-        .status-alerted { background-color: #3b82f6; }
-        .status-error { background-color: #ef4444; }
-        
-        /* Autocomplete styles */
+
+        body {
+            font-family: 'Instrument Sans', sans-serif;
+            color: #1c1917;
+            background: #fafaf9;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            min-height: 100vh;
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: #1c1917;
+            color: #fafaf9;
+            padding: 32px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.06);
+        }
+
+        .logo {
+            font-size: 22px;
+            font-weight: 700;
+            color: #059669;
+            padding: 0 12px;
+        }
+
+        .nav-item {
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.15s ease-out;
+            background: transparent;
+            color: #a8a29e;
+        }
+
+        .nav-item:hover {
+            background: #292524;
+            color: #fafaf9;
+        }
+
+        .nav-item.active {
+            background: #059669;
+            color: white;
+        }
+
+        .quick-stats {
+            background: #292524;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: auto;
+        }
+
+        .quick-stats h4 {
+            font-size: 13px;
+            color: #a8a29e;
+            margin-bottom: 16px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .stat-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .stat-label {
+            color: #d6d3d1;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #fafaf9;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            padding: 40px;
+            max-width: 1280px;
+        }
+
+        .page-header {
+            margin-bottom: 24px;
+        }
+
+        .page-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .page-subtitle {
+            color: #57534e;
+            font-size: 15px;
+        }
+
+        /* Search Card */
+        .search-card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .search-card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #57534e;
+            margin-bottom: 6px;
+        }
+
+        .input, .select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d6d3d1;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 15px;
+            color: #1c1917;
+            background: white;
+            transition: all 0.15s ease-out;
+        }
+
+        .input:focus, .select:focus {
+            outline: none;
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+
+        .input::placeholder {
+            color: #a8a29e;
+        }
+
+        /* Autocomplete */
         .autocomplete {
             position: relative;
         }
+
         .autocomplete-results {
             position: absolute;
             top: 100%;
             left: 0;
             right: 0;
             background: white;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #d6d3d1;
             border-top: none;
-            border-radius: 0 0 0.5rem 0.5rem;
+            border-radius: 0 0 6px 6px;
             max-height: 400px;
             overflow-y: auto;
             z-index: 10;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
         }
+
         .autocomplete-item {
-            padding: 0.75rem 1rem;
+            padding: 12px;
             cursor: pointer;
-            border-bottom: 1px solid #f3f4f6;
+            border-bottom: 1px solid #f5f5f4;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 12px;
+            transition: background 0.1s;
         }
+
         .autocomplete-item:hover {
-            background-color: #f9fafb;
+            background: #f5f5f4;
         }
+
         .autocomplete-item:last-child {
             border-bottom: none;
         }
-        .autocomplete-item img {
-            width: 60px;
-            height: 60px;
-            object-fit: cover;
-            border-radius: 0.375rem;
-        }
-        .autocomplete-item-details {
-            flex: 1;
-        }
-        .autocomplete-item-name {
-            font-weight: 500;
-            color: #111827;
-        }
-        .autocomplete-item-location {
-            font-size: 0.875rem;
-            color: #6b7280;
-            margin-top: 0.25rem;
-        }
-        
-        /* Calendar styles */
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 0.5rem;
-        }
-        .calendar-day {
-            padding: 0.75rem;
-            text-align: center;
-            border-radius: 0.375rem;
-            cursor: pointer;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        .calendar-day-header {
-            padding: 0.5rem;
-            text-align: center;
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: #6b7280;
-            text-transform: uppercase;
-        }
-        .calendar-day-disabled {
-            background-color: #f9fafb;
-            color: #d1d5db;
-            cursor: not-allowed;
-        }
-        .calendar-day-available {
-            background-color: #d1fae5;
-            color: #065f46;
-            border: 2px solid #10b981;
-        }
-        .calendar-day-available:hover {
-            background-color: #a7f3d0;
-        }
-        .calendar-day-sold-out {
-            background-color: #fee2e2;
-            color: #991b1b;
-            border: 2px solid #ef4444;
-        }
-        .calendar-day-loading {
-            background-color: #fef3c7;
-            color: #92400e;
-            border: 2px solid #f59e0b;
-        }
-        
-        /* Progress steps */
-        .step-indicator {
+
+        .autocomplete-item-image {
+            width: 48px;
+            height: 48px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #059669 0%, #0891b2 100%);
             display: flex;
             align-items: center;
-            margin-bottom: 2rem;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            color: rgba(255,255,255,0.4);
+            flex-shrink: 0;
         }
-        .step {
+
+        .autocomplete-item-details {
             flex: 1;
-            text-align: center;
+            min-width: 0;
+        }
+
+        .autocomplete-item-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: #1c1917;
+            margin-bottom: 2px;
+        }
+
+        .autocomplete-item-location {
+            font-size: 13px;
+            color: #78716c;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 18px;
+            border-radius: 6px;
+            border: none;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease-out;
+        }
+
+        .btn-primary {
+            background: #059669;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #047857;
+            box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #059669;
+            border: 1px solid #d6d3d1;
+        }
+
+        .btn-secondary:hover {
+            border-color: #059669;
+            background: #f0fdf4;
+        }
+
+        .btn-link {
+            background: none;
+            border: none;
+            color: #059669;
+            padding: 0;
+            font-size: 14px;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .btn-link:hover {
+            color: #047857;
+        }
+
+        /* Site Selection */
+        .site-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 12px;
+            background: #fafaf9;
+            border-radius: 6px;
+        }
+
+        .site-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            background: white;
+            border: 1px solid #e7e5e4;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.1s;
+        }
+
+        .site-checkbox-label:hover {
+            border-color: #059669;
+            background: #f0fdf4;
+        }
+
+        .site-checkbox {
+            margin: 0;
+        }
+
+        /* Watches Grid */
+        .watches-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 20px;
+        }
+
+        /* Campground Card */
+        .campground-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            transition: all 0.15s ease-out;
+        }
+
+        .campground-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        }
+
+        .campground-header-img {
+            height: 140px;
+            background: linear-gradient(135deg, #059669 0%, #0891b2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.35);
             position: relative;
         }
-        .step-number {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: inline-flex;
+
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            backdrop-filter: blur(8px);
+        }
+
+        .status-active {
+            background: rgba(5, 150, 105, 0.9);
+            color: white;
+        }
+
+        .status-alerted {
+            background: rgba(234, 88, 12, 0.9);
+            color: white;
+        }
+
+        .campground-content {
+            padding: 16px;
+        }
+
+        .campground-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 2px;
+            color: #1c1917;
+        }
+
+        .campground-location {
+            font-size: 13px;
+            color: #78716c;
+            margin-bottom: 12px;
+        }
+
+        .campground-dates {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 13px;
+            color: #57534e;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .campground-sites {
+            font-size: 12px;
+            color: #78716c;
+            margin-bottom: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #f5f5f4;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .card-actions .btn {
+            flex: 1;
+            text-align: center;
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: #78716c;
+        }
+
+        .empty-state-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #57534e;
+            margin-bottom: 6px;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 24px;
+            color: #78716c;
+        }
+
+        /* Calendar */
+        .calendar-mini {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            margin-bottom: 10px;
+        }
+
+        .calendar-day {
+            aspect-ratio: 1;
+            border-radius: 3px;
+            font-size: 10px;
+            display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 600;
-            margin-bottom: 0.5rem;
+            font-variant-numeric: tabular-nums;
         }
-        .step-inactive .step-number {
-            background-color: #e5e7eb;
-            color: #9ca3af;
+
+        .day-available {
+            background: #d1fae5;
+            color: #065f46;
         }
-        .step-active .step-number {
-            background-color: #3b82f6;
-            color: white;
+
+        .day-sold-out {
+            background: #fee2e2;
+            color: #991b1b;
         }
-        .step-complete .step-number {
-            background-color: #10b981;
-            color: white;
+
+        .day-disabled {
+            background: #f5f5f4;
+            color: #d6d3d1;
         }
-        .step-line {
-            position: absolute;
-            top: 16px;
-            left: 50%;
-            right: -50%;
-            height: 2px;
-            background-color: #e5e7eb;
-            z-index: -1;
-        }
-        .step-complete .step-line {
-            background-color: #10b981;
+
+        /* Utility */
+        .hidden {
+            display: none;
         }
     </style>
 </head>
-<body class="bg-gray-50">
-    <!-- Header -->
-    <header class="bg-white shadow-sm border-b">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center">
-                    <h1 class="text-2xl font-bold text-gray-900">🔥 Firewatch</h1>
-                    <span class="ml-3 text-sm text-gray-500">Campsite Availability Monitor</span>
-                </div>
-                <div id="healthStatus" class="text-sm text-gray-500">
-                    <span class="status-dot status-active"></span>
-                    <span>Checking status...</span>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Search Flow -->
-        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">Find Your Campsite</h2>
-            <p class="text-gray-500 mb-6">Search for campgrounds, check availability, and set up alerts for sold-out dates.</p>
+<body>
+    <div class="layout">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">Firewatch</div>
             
-            <!-- Progress Steps -->
-            <div class="step-indicator mb-8">
-                <div class="step step-active" id="step1">
-                    <div class="step-number">1</div>
-                    <div class="text-xs font-medium">Search</div>
-                    <div class="step-line"></div>
+            <nav>
+                <div class="nav-item active">My Watches</div>
+                <div class="nav-item" onclick="showSearch()">Find Campgrounds</div>
+            </nav>
+
+            <div class="quick-stats" id="quickStats">
+                <h4>Quick Stats</h4>
+                <div class="stat-row">
+                    <span class="stat-label">Active</span>
+                    <span class="stat-value" id="activeCount">0</span>
                 </div>
-                <div class="step step-inactive" id="step2">
-                    <div class="step-number">2</div>
-                    <div class="text-xs font-medium">Dates</div>
-                    <div class="step-line"></div>
-                </div>
-                <div class="step step-inactive" id="step3">
-                    <div class="step-number">3</div>
-                    <div class="text-xs font-medium">Availability</div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Checks</span>
+                    <span class="stat-value">--</span>
                 </div>
             </div>
+        </div>
 
-            <!-- Step 1: Search Campground -->
-            <div id="searchStep" class="search-step">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Search for a Campground</label>
-                <div class="autocomplete">
-                    <input
-                        type="text"
-                        id="campgroundSearch"
-                        placeholder="Type campground name (e.g., Yosemite, Kirk Creek)..."
-                        autocomplete="off"
-                        class="w-full border-2 rounded-lg px-4 py-3 text-lg focus:border-blue-500 focus:outline-none">
-                    <div id="searchResults" class="autocomplete-results hidden"></div>
-                </div>
+        <!-- Main Content -->
+        <div class="main">
+            <div class="page-header">
+                <h1 class="page-title">My Watches</h1>
+                <p class="page-subtitle" id="subtitle">Your campground availability monitors</p>
             </div>
 
-            <!-- Step 2: Enter Dates -->
-            <div id="datesStep" class="hidden">
-                <div class="mb-4">
-                    <div class="flex items-center gap-2 mb-2">
-                        <img id="selectedCampgroundImage" src="" class="w-16 h-16 rounded-lg object-cover" style="display: none;">
-                        <div>
-                            <h3 class="font-semibold text-lg" id="selectedCampgroundName"></h3>
-                            <p class="text-sm text-gray-500" id="selectedCampgroundLocation"></p>
+            <!-- Search Card -->
+            <div class="search-card" id="searchCard">
+                <h3>Find a Campground</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">Search Campgrounds</label>
+                    <div class="autocomplete">
+                        <input
+                            type="text"
+                            id="campgroundSearch"
+                            class="input"
+                            placeholder="Type campground name (e.g., Yosemite, Kirk Creek)..."
+                            autocomplete="off">
+                        <div id="searchResults" class="autocomplete-results hidden"></div>
+                    </div>
+                </div>
+
+                <!-- Date & Site Selection (shown after campground selected) -->
+                <div id="detailsForm" class="hidden">
+                    <div class="form-group">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <div>
+                                <div class="campground-title" id="selectedName"></div>
+                                <div class="campground-location" id="selectedLocation"></div>
+                            </div>
+                            <button onclick="backToSearch()" class="btn-link">Change</button>
                         </div>
                     </div>
-                    <button onclick="backToSearch()" class="text-sm text-blue-600 hover:underline">← Change campground</button>
-                </div>
 
-                <!-- Site Selection (Optional) -->
-                <div class="mb-6 border-2 border-gray-200 rounded-lg p-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <label class="block text-sm font-medium text-gray-700">
-                            Which sites?
-                            <span class="text-gray-500 font-normal">(optional - leave unchecked for any site)</span>
+                    <!-- Site Selection -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            Specific Sites (optional)
+                            <span style="font-weight: 400; color: #a8a29e;">— Leave empty for any site</span>
                         </label>
-                        <div class="flex gap-2">
-                            <button onclick="selectAllSites()" class="text-xs text-blue-600 hover:underline">Select All</button>
-                            <button onclick="clearAllSites()" class="text-xs text-blue-600 hover:underline">Clear</button>
+                        <div id="siteSelectionLoading" class="loading" style="padding: 16px;">Loading sites...</div>
+                        <div id="siteSelectionContainer" class="hidden">
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <button onclick="selectAllSites()" class="btn-link">Select All</button>
+                                <button onclick="clearAllSites()" class="btn-link">Clear</button>
+                            </div>
+                            <div id="siteSelectionList" class="site-grid"></div>
                         </div>
                     </div>
-                    <div id="siteSelectionLoading" class="text-center py-4 text-sm text-gray-500">
-                        Loading sites...
-                    </div>
-                    <div id="siteSelectionList" class="hidden grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
-                        <!-- Site checkboxes will be injected here -->
-                    </div>
-                </div>
 
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Check-in Date</label>
-                        <input type="date" id="checkinDate" class="w-full border rounded-lg px-3 py-2">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">Check-in</label>
+                            <input type="date" id="checkinDate" class="input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Check-out</label>
+                            <input type="date" id="checkoutDate" class="input">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Check-out Date</label>
-                        <input type="date" id="checkoutDate" class="w-full border rounded-lg px-3 py-2">
+
+                    <div class="form-group">
+                        <label class="form-label">Site Type</label>
+                        <select id="siteType" class="select">
+                            <option value="Any">Any</option>
+                            <option value="Standard">Standard</option>
+                            <option value="Electric">Electric</option>
+                            <option value="Full Hookup">Full Hookup</option>
+                            <option value="Group">Group</option>
+                        </select>
                     </div>
-                </div>
 
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Site Type</label>
-                    <select id="siteType" class="w-full border rounded-lg px-3 py-2">
-                        <option value="Any">Any</option>
-                        <option value="Standard">Standard</option>
-                        <option value="Electric">Electric</option>
-                        <option value="Full Hookup">Full Hookup</option>
-                        <option value="Group">Group</option>
-                    </select>
+                    <button onclick="createWatch()" class="btn btn-primary" style="width: 100%;">
+                        Create Watch
+                    </button>
                 </div>
-
-                <button onclick="checkAvailability()" class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold">
-                    Check Availability →
-                </button>
             </div>
 
-            <!-- Step 3: Availability Results -->
-            <div id="availabilityStep" class="hidden">
-                <div class="mb-4">
-                    <button onclick="backToDates()" class="text-sm text-blue-600 hover:underline">← Change dates</button>
-                </div>
-
-                <div id="availabilityLoading" class="text-center py-8">
-                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <p class="text-gray-600 mt-2">Checking availability...</p>
-                </div>
-
-                <div id="availabilityResults" class="hidden">
-                    <!-- Results will be injected here -->
+            <!-- Watches List -->
+            <div class="watches-grid" id="watchesList">
+                <div class="empty-state">
+                    <div class="empty-state-title">No watches yet</div>
+                    <div class="empty-state-text">Search for a campground above to get started</div>
                 </div>
             </div>
         </div>
-
-        <!-- My Watches Section -->
-        <div class="bg-white rounded-lg shadow-sm p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-gray-900">My Watches</h2>
-                <span class="text-sm text-gray-500"><span id="activeCount">0</span> active</span>
-            </div>
-            <div id="watchesList">
-                <div class="text-center text-gray-500 py-4 text-sm">No watches yet</div>
-            </div>
-        </div>
-    </main>
+    </div>
 
     <script src="/static/app.js"></script>
 </body>
