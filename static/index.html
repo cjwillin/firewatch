@@ -828,6 +828,100 @@
             text-decoration: underline;
         }
 
+        /* Related Campgrounds */
+        .related-campgrounds {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #fafaf9;
+            border: 1px solid #e7e5e4;
+            border-radius: 8px;
+        }
+
+        .related-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e7e5e4;
+        }
+
+        .related-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1c1917;
+        }
+
+        .related-count {
+            font-size: 12px;
+            font-weight: 500;
+            color: #78716c;
+            background: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .related-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 8px;
+        }
+
+        .related-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: white;
+            border: 1px solid #e7e5e4;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease-out;
+        }
+
+        .related-item:hover {
+            border-color: #0891b2;
+            box-shadow: 0 1px 4px rgba(8, 145, 178, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .related-image {
+            width: 36px;
+            height: 36px;
+            border-radius: 4px;
+            background: linear-gradient(135deg, #059669 0%, #0891b2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            flex-shrink: 0;
+        }
+
+        .related-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .related-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1c1917;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .related-meta {
+            font-size: 11px;
+            color: #78716c;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         /* Availability Results (legacy - keep for watch cards) */
         .availability-results {
             margin-top: 24px;
@@ -1083,6 +1177,9 @@
                             <button onclick="backToSearch()" class="btn-link">Change</button>
                         </div>
                     </div>
+
+                    <!-- Related Campgrounds -->
+                    <div id="relatedCampgroundsContainer"></div>
 
                     <!-- Filters -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">

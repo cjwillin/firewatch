@@ -215,3 +215,65 @@ def check_availability(
 
     finally:
         client.close()
+
+
+@router.get("/{campground_id}/related")
+def get_related_campgrounds(
+    campground_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get campgrounds in the same park system (e.g., all Los Padres National Forest campgrounds).
+
+    Returns: [{"id": "...", "name": "...", "location": "...", "distance_km": ...}, ...]
+    """
+    # Get the source campground
+    campground = db.query(Campground).filter(
+        Campground.recreation_id == campground_id
+    ).first()
+
+    if not campground:
+        raise HTTPException(status_code=404, detail="Campground not found")
+
+    related = []
+
+    # Find campgrounds with same parent_entity_id
+    if campground.parent_entity_id:
+        same_park = db.query(Campground).filter(
+            Campground.parent_entity_id == campground.parent_entity_id,
+            Campground.recreation_id != campground_id
+        ).limit(20).all()
+
+        for cg in same_park:
+            # Calculate distance if both have coordinates
+            distance_km = None
+            if (campground.latitude and campground.longitude and
+                cg.latitude and cg.longitude):
+                # Haversine formula (simplified for small distances)
+                lat1, lon1 = campground.latitude / 100000, campground.longitude / 100000
+                lat2, lon2 = cg.latitude / 100000, cg.longitude / 100000
+
+                import math
+                R = 6371  # Earth radius in km
+                dlat = math.radians(lat2 - lat1)
+                dlon = math.radians(lon2 - lon1)
+                a = (math.sin(dlat/2) ** 2 +
+                     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+                     math.sin(dlon/2) ** 2)
+                c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+                distance_km = R * c
+
+            cg_dict = cg.to_dict()
+            cg_dict["distance_km"] = round(distance_km, 1) if distance_km else None
+            cg_dict["relationship"] = "same_park"
+            related.append(cg_dict)
+
+    # Sort by distance if available, otherwise by name
+    related.sort(key=lambda x: (x["distance_km"] is None, x["distance_km"] if x["distance_km"] else 0, x["name"]))
+
+    return {
+        "campground": campground.to_dict(),
+        "parent_name": campground.parent_name,
+        "related_campgrounds": related,
+        "total": len(related)
+    }

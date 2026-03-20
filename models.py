@@ -238,6 +238,9 @@ class Campground(Base):
     longitude = Column(Integer)  # Stored as int (e.g., -119.55718 → -119557180)
     preview_image_url = Column(String)
     description = Column(Text)
+    parent_entity_id = Column(String, index=True)  # Recreation area ID (e.g., "1067" for Los Padres NF)
+    parent_name = Column(String)  # Recreation area name (e.g., "Los Padres National Forest")
+    org_name = Column(String)  # Managing organization (e.g., "USDA Forest Service")
     last_synced = Column(DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -249,4 +252,7 @@ class Campground(Base):
             "latitude": self.latitude / 100000 if self.latitude else None,
             "longitude": self.longitude / 100000 if self.longitude else None,
             "preview_image_url": self.preview_image_url,
+            "parent_entity_id": self.parent_entity_id,
+            "parent_name": self.parent_name,
+            "org_name": self.org_name,
         }

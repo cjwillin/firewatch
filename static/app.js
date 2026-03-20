@@ -156,6 +156,9 @@ function selectCampground(campground) {
     document.getElementById('selectedName').textContent = campground.name;
     document.getElementById('selectedLocation').textContent = campground.location;
 
+    // Load related campgrounds
+    loadRelatedCampgrounds(campground.id);
+
     // Load sites for filtering
     loadCampgroundSites(campground.id);
 
@@ -167,6 +170,70 @@ function selectCampground(campground) {
     siteTypeSelect.addEventListener('change', () => {
         loadMonthlyAvailability();
     });
+}
+
+async function loadRelatedCampgrounds(campgroundId) {
+    const container = document.getElementById('relatedCampgroundsContainer');
+    if (!container) return;
+
+    container.innerHTML = '<p style="font-size: 13px; color: #78716c;">Loading related campgrounds...</p>';
+
+    try {
+        const data = await apiFetch(`${API_BASE}/campgrounds/${campgroundId}/related`);
+
+        if (!data.related_campgrounds || data.related_campgrounds.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = `
+            <div class="related-campgrounds">
+                <div class="related-header">
+                    <span class="related-title">Other campgrounds in ${data.parent_name || 'this area'}</span>
+                    <span class="related-count">${data.total} total</span>
+                </div>
+                <div class="related-list">
+        `;
+
+        for (const cg of data.related_campgrounds.slice(0, 8)) {
+            const initials = cg.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+            const distance = cg.distance_km ? `${cg.distance_km} km` : '';
+
+            html += `
+                <div class="related-item" onclick="selectCampgroundById('${cg.id}')">
+                    <div class="related-image">${initials}</div>
+                    <div class="related-info">
+                        <div class="related-name">${cg.name}</div>
+                        <div class="related-meta">
+                            ${cg.location}${distance ? ` • ${distance}` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
+    } catch (err) {
+        console.error('Failed to load related campgrounds:', err);
+        container.innerHTML = '';
+    }
+}
+
+async function selectCampgroundById(campgroundId) {
+    // Fetch campground details and call selectCampground
+    try {
+        const results = await apiFetch(`${API_BASE}/campgrounds/search?q=${campgroundId}&limit=1`);
+        if (results && results.length > 0) {
+            selectCampground(results[0]);
+        }
+    } catch (err) {
+        console.error('Failed to load campground:', err);
+    }
 }
 
 async function loadCampgroundSites(campgroundId) {

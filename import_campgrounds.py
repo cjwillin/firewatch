@@ -93,6 +93,9 @@ def fetch_and_import_campgrounds(db):
                         longitude=lon_int,
                         preview_image_url=item.get("preview_image_url"),
                         description=item.get("description"),
+                        parent_entity_id=item.get("parent_entity_id"),
+                        parent_name=item.get("parent_name"),
+                        org_name=item.get("org_name"),
                         last_synced=datetime.utcnow()
                     )
 
