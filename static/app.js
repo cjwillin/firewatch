@@ -13,6 +13,7 @@ let availabilityData = null;
 let currentMonth = new Date();
 let selectedStartDate = null;
 let selectedEndDate = null;
+let dateSelectionMode = 'range'; // 'range' or 'specific'
 
 // Fetch wrapper
 async function apiFetch(url, options = {}) {
@@ -298,6 +299,14 @@ function renderMonthlyCalendar(data) {
     const canGoPrev = currentMonth > today;
 
     let calendarHTML = `
+        <div class="date-mode-selector">
+            <label for="dateMode">Date selection:</label>
+            <select id="dateMode" onchange="changeDateMode(this.value)" class="form-select">
+                <option value="range" ${dateSelectionMode === 'range' ? 'selected' : ''}>Date range</option>
+                <option value="specific" ${dateSelectionMode === 'specific' ? 'selected' : ''}>Specific day</option>
+            </select>
+            <span class="mode-hint">${dateSelectionMode === 'specific' ? 'Click any day to watch that night' : 'Click start date, then end date'}</span>
+        </div>
         <div class="calendar-header">
             <button onclick="prevMonth()" class="btn btn-secondary btn-sm" ${!canGoPrev ? 'disabled' : ''}>← Prev</button>
             <h3>${monthName}</h3>
@@ -306,11 +315,11 @@ function renderMonthlyCalendar(data) {
         <div class="calendar-legend">
             <div class="legend-item">
                 <div class="legend-dot available"></div>
-                <span>Available (click to book)</span>
+                <span>Available ${dateSelectionMode === 'specific' ? '(click to book that night)' : '(click to book)'}</span>
             </div>
             <div class="legend-item">
                 <div class="legend-dot sold-out"></div>
-                <span>Sold out (click to watch)</span>
+                <span>Sold out ${dateSelectionMode === 'specific' ? '(click to watch that night)' : '(click to watch)'}</span>
             </div>
             <div class="legend-item">
                 <div class="legend-dot past"></div>
@@ -456,31 +465,49 @@ function checkRangeAvailability(startDate, endDate, data) {
 function handleDateClick(dateStr, isAvailable) {
     const clickedDate = new Date(dateStr + 'T00:00:00');
 
-    if (!selectedStartDate) {
-        // First click - set start date
+    if (dateSelectionMode === 'specific') {
+        // Specific day mode - single click selects that night (checkin = clicked, checkout = clicked + 1)
         selectedStartDate = clickedDate;
-        selectedEndDate = null;
-        loadMonthlyAvailability(); // Re-render to show selection
-    } else if (!selectedEndDate) {
-        // Second click - set end date
-        if (clickedDate > selectedStartDate) {
-            selectedEndDate = clickedDate;
-            loadMonthlyAvailability(); // Re-render to show full selection
+        const nextDay = new Date(clickedDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        selectedEndDate = nextDay;
+        loadMonthlyAvailability();
+    } else {
+        // Range mode - click start, then click end
+        if (!selectedStartDate) {
+            // First click - set start date
+            selectedStartDate = clickedDate;
+            selectedEndDate = null;
+            loadMonthlyAvailability(); // Re-render to show selection
+        } else if (!selectedEndDate) {
+            // Second click - set end date
+            if (clickedDate > selectedStartDate) {
+                selectedEndDate = clickedDate;
+                loadMonthlyAvailability(); // Re-render to show full selection
+            } else {
+                // Clicked earlier date, reset
+                selectedStartDate = clickedDate;
+                selectedEndDate = null;
+                loadMonthlyAvailability();
+            }
         } else {
-            // Clicked earlier date, reset
+            // Already have both dates, reset selection
             selectedStartDate = clickedDate;
             selectedEndDate = null;
             loadMonthlyAvailability();
         }
-    } else {
-        // Already have both dates, reset selection
-        selectedStartDate = clickedDate;
-        selectedEndDate = null;
-        loadMonthlyAvailability();
     }
 }
 
 function clearSelection() {
+    selectedStartDate = null;
+    selectedEndDate = null;
+    loadMonthlyAvailability();
+}
+
+function changeDateMode(newMode) {
+    dateSelectionMode = newMode;
+    // Clear current selection when switching modes
     selectedStartDate = null;
     selectedEndDate = null;
     loadMonthlyAvailability();
