@@ -10,6 +10,9 @@ const API_KEY = localStorage.getItem('firewatch_api_key') || '';
 let selectedCampground = null;
 let searchTimeout = null;
 let availabilityData = null;
+let currentMonth = new Date();
+let selectedStartDate = null;
+let selectedEndDate = null;
 
 // Fetch wrapper
 async function apiFetch(url, options = {}) {
@@ -51,10 +54,9 @@ async function apiFetch(url, options = {}) {
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initializeCampgroundSearch();
-    initializeDateInputs();
     loadWatches();
     updateStats();
-    
+
     // Update stats every 30 seconds
     setInterval(updateStats, 30000);
 });
@@ -144,25 +146,25 @@ async function searchCampgrounds(query) {
 
 function selectCampground(campground) {
     selectedCampground = campground;
+    currentMonth = new Date();
+    selectedStartDate = null;
+    selectedEndDate = null;
 
     document.getElementById('searchResults').classList.add('hidden');
     document.getElementById('detailsForm').classList.remove('hidden');
     document.getElementById('selectedName').textContent = campground.name;
     document.getElementById('selectedLocation').textContent = campground.location;
 
-    // Reset availability
-    hideAvailability();
-
+    // Load sites for filtering
     loadCampgroundSites(campground.id);
+
+    // Show monthly calendar immediately
+    loadMonthlyAvailability();
 
     // Add site type change listener
     const siteTypeSelect = document.getElementById('siteType');
     siteTypeSelect.addEventListener('change', () => {
-        const checkin = document.getElementById('checkinDate').value;
-        const checkout = document.getElementById('checkoutDate').value;
-        if (checkin && checkout) {
-            checkAvailability();
-        }
+        loadMonthlyAvailability();
     });
 }
 
@@ -192,16 +194,15 @@ async function loadCampgroundSites(campgroundId) {
         // Add change listeners to checkboxes
         document.querySelectorAll('.site-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', () => {
-                const checkin = document.getElementById('checkinDate').value;
-                const checkout = document.getElementById('checkoutDate').value;
-                if (checkin && checkout) {
-                    checkAvailability();
+                if (selectedCampground) {
+                    loadMonthlyAvailability();
                 }
             });
         });
 
         loadingEl.classList.add('hidden');
         containerEl.classList.remove('hidden');
+        listEl.classList.remove('hidden');
 
     } catch (err) {
         console.error('Failed to load sites:', err);
@@ -211,19 +212,15 @@ async function loadCampgroundSites(campgroundId) {
 
 function selectAllSites() {
     document.querySelectorAll('.site-checkbox').forEach(cb => cb.checked = true);
-    const checkin = document.getElementById('checkinDate').value;
-    const checkout = document.getElementById('checkoutDate').value;
-    if (checkin && checkout) {
-        checkAvailability();
+    if (selectedCampground) {
+        loadMonthlyAvailability();
     }
 }
 
 function clearAllSites() {
     document.querySelectorAll('.site-checkbox').forEach(cb => cb.checked = false);
-    const checkin = document.getElementById('checkinDate').value;
-    const checkout = document.getElementById('checkoutDate').value;
-    if (checkin && checkout) {
-        checkAvailability();
+    if (selectedCampground) {
+        loadMonthlyAvailability();
     }
 }
 
@@ -235,66 +232,39 @@ function getSelectedSites() {
 function backToSearch() {
     selectedCampground = null;
     availabilityData = null;
+    selectedStartDate = null;
+    selectedEndDate = null;
+    currentMonth = new Date();
     document.getElementById('detailsForm').classList.add('hidden');
     document.getElementById('campgroundSearch').value = '';
     document.getElementById('campgroundSearch').focus();
-    hideAvailability();
+    document.getElementById('monthlyCalendar').classList.add('hidden');
 }
 
 function showSearch() {
     document.getElementById('searchCard').classList.remove('hidden');
 }
 
-// Date inputs
-function initializeDateInputs() {
-    const checkinInput = document.getElementById('checkinDate');
-    const checkoutInput = document.getElementById('checkoutDate');
-
-    const today = new Date().toISOString().split('T')[0];
-    checkinInput.min = today;
-    checkoutInput.min = today;
-
-    checkinInput.addEventListener('change', () => {
-        const checkin = new Date(checkinInput.value);
-        checkin.setDate(checkin.getDate() + 1);
-        checkoutInput.min = checkin.toISOString().split('T')[0];
-
-        if (checkoutInput.value && new Date(checkoutInput.value) <= new Date(checkinInput.value)) {
-            checkoutInput.value = '';
-            hideAvailability();
-        } else if (checkoutInput.value) {
-            checkAvailability();
-        }
-    });
-
-    checkoutInput.addEventListener('change', () => {
-        if (checkinInput.value && checkoutInput.value) {
-            checkAvailability();
-        }
-    });
-}
-
-// Check availability and show results
-async function checkAvailability() {
+// Load monthly availability calendar
+async function loadMonthlyAvailability() {
     if (!selectedCampground) return;
 
-    const checkin = document.getElementById('checkinDate').value;
-    const checkout = document.getElementById('checkoutDate').value;
-    const siteType = document.getElementById('siteType').value;
-    const selectedSites = getSelectedSites();
-
-    if (!checkin || !checkout) return;
-
-    // Show loading state
-    const availabilityContainer = document.getElementById('availabilityResults');
-    availabilityContainer.classList.remove('hidden');
-    availabilityContainer.innerHTML = '<div class="loading">Checking availability...</div>';
+    const calendarContainer = document.getElementById('monthlyCalendar');
+    calendarContainer.classList.remove('hidden');
+    calendarContainer.innerHTML = '<div class="loading">Loading availability...</div>';
 
     try {
+        const siteType = document.getElementById('siteType').value;
+        const selectedSites = getSelectedSites();
+
+        // Get first and last day of current month
+        const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+        const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+
         // Build query params
         const params = new URLSearchParams({
-            checkin: checkin,
-            checkout: checkout,
+            checkin: firstDay.toISOString().split('T')[0],
+            checkout: lastDay.toISOString().split('T')[0],
             site_type: siteType || 'Any'
         });
 
@@ -305,161 +275,238 @@ async function checkAvailability() {
         const data = await apiFetch(`${API_BASE}/campgrounds/${selectedCampground.id}/availability?${params}`);
         availabilityData = data;
 
-        renderAvailabilityResults(data);
+        renderMonthlyCalendar(data);
 
     } catch (err) {
-        console.error('Availability check failed:', err);
-        availabilityContainer.innerHTML = `
+        console.error('Failed to load availability:', err);
+        calendarContainer.innerHTML = `
             <div class="availability-error">
-                <p><strong>Failed to check availability</strong></p>
+                <p><strong>Failed to load availability</strong></p>
                 <p style="font-size: 13px; color: #78716c; margin-top: 4px;">${err.message}</p>
             </div>
         `;
     }
 }
 
-function hideAvailability() {
-    const availabilityContainer = document.getElementById('availabilityResults');
-    availabilityContainer.classList.add('hidden');
-    availabilityData = null;
-}
+function renderMonthlyCalendar(data) {
+    const container = document.getElementById('monthlyCalendar');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-function renderAvailabilityResults(data) {
-    const container = document.getElementById('availabilityResults');
-    const hasAvailability = data.has_availability;
+    // Month header with navigation
+    const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const canGoPrev = currentMonth > today;
 
-    // Calculate total nights
-    const checkinDate = new Date(data.date_range.checkin);
-    const checkoutDate = new Date(data.date_range.checkout);
-    const nights = Math.ceil((checkoutDate - checkinDate) / (1000 * 60 * 60 * 24));
+    let calendarHTML = `
+        <div class="calendar-header">
+            <button onclick="prevMonth()" class="btn btn-secondary btn-sm" ${!canGoPrev ? 'disabled' : ''}>← Prev</button>
+            <h3>${monthName}</h3>
+            <button onclick="nextMonth()" class="btn btn-secondary btn-sm">Next →</button>
+        </div>
+        <div class="calendar-legend">
+            <div class="legend-item">
+                <div class="legend-dot available"></div>
+                <span>Available (click to book)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot sold-out"></div>
+                <span>Sold out (click to watch)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot past"></div>
+                <span>Past dates</span>
+            </div>
+        </div>
+        <div class="calendar-grid-full">
+            <div class="calendar-weekday">Sun</div>
+            <div class="calendar-weekday">Mon</div>
+            <div class="calendar-weekday">Tue</div>
+            <div class="calendar-weekday">Wed</div>
+            <div class="calendar-weekday">Thu</div>
+            <div class="calendar-weekday">Fri</div>
+            <div class="calendar-weekday">Sat</div>
+    `;
 
-    // Build calendar view
-    const availabilityDates = Object.keys(data.availability).sort();
-    const calendarHTML = availabilityDates.map(dateStr => {
+    // Get first day of month and number of days
+    const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    const firstDayOfWeek = firstDay.getDay();
+    const numDays = lastDay.getDate();
+
+    // Add empty cells for days before month starts
+    for (let i = 0; i < firstDayOfWeek; i++) {
+        calendarHTML += '<div class="calendar-day-cell empty"></div>';
+    }
+
+    // Add days of month
+    for (let day = 1; day <= numDays; day++) {
+        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+        const dateStr = date.toISOString().split('T')[0];
         const dayData = data.availability[dateStr];
-        const date = new Date(dateStr);
-        const dayNum = date.getDate();
-        const monthShort = date.toLocaleDateString('en-US', { month: 'short' });
+        const isPast = date < today;
 
-        const statusClass = dayData.status === 'available' ? 'day-available' : 'day-sold-out';
+        let cellClass = 'calendar-day-cell';
+        let sitesText = '';
+        let clickable = false;
 
-        return `
-            <div class="calendar-day-large ${statusClass}">
-                <div class="day-header">${monthShort} ${dayNum}</div>
-                <div class="day-sites">${dayData.sites_count} ${dayData.sites_count === 1 ? 'site' : 'sites'}</div>
+        if (isPast) {
+            cellClass += ' past';
+        } else if (dayData) {
+            if (dayData.status === 'available' && dayData.sites_count > 0) {
+                cellClass += ' available clickable';
+                sitesText = `${dayData.sites_count} ${dayData.sites_count === 1 ? 'site' : 'sites'}`;
+                clickable = true;
+            } else {
+                cellClass += ' sold-out clickable';
+                sitesText = 'Sold out';
+                clickable = true;
+            }
+        }
+
+        // Check if this date is in selection range
+        if (selectedStartDate || selectedEndDate) {
+            const dateMs = date.getTime();
+            if (selectedStartDate && dateMs === selectedStartDate.getTime()) {
+                cellClass += ' selected-start';
+            }
+            if (selectedEndDate && dateMs === selectedEndDate.getTime()) {
+                cellClass += ' selected-end';
+            }
+            if (selectedStartDate && selectedEndDate &&
+                dateMs > selectedStartDate.getTime() && dateMs < selectedEndDate.getTime()) {
+                cellClass += ' selected-range';
+            }
+        }
+
+        const onclickAttr = clickable ? `onclick="handleDateClick('${dateStr}', ${dayData.status === 'available'})"` : '';
+
+        calendarHTML += `
+            <div class="${cellClass}" ${onclickAttr} data-date="${dateStr}">
+                <div class="day-number">${day}</div>
+                ${sitesText ? `<div class="day-info">${sitesText}</div>` : ''}
             </div>
         `;
-    }).join('');
+    }
 
-    if (hasAvailability) {
-        // Show available sites and booking option
-        const sitesHTML = data.available_sites.map(site => `
-            <div class="available-site">
-                <div class="site-name">${site.site_name}</div>
-                <div class="site-type">${site.site_type}</div>
-                <div class="site-dates">${site.available_dates.length} night${site.available_dates.length !== 1 ? 's' : ''} available</div>
-            </div>
-        `).join('');
+    calendarHTML += '</div>';
 
-        container.innerHTML = `
-            <div class="availability-results">
-                <div class="availability-header success">
-                    <div class="availability-icon">✓</div>
-                    <div>
-                        <div class="availability-title">Sites Available!</div>
-                        <div class="availability-subtitle">${data.available_sites.length} ${data.available_sites.length === 1 ? 'site' : 'sites'} found for ${nights} ${nights === 1 ? 'night' : 'nights'}</div>
+    // Selection summary
+    if (selectedStartDate && selectedEndDate) {
+        const nights = Math.ceil((selectedEndDate - selectedStartDate) / (1000 * 60 * 60 * 24));
+        const startStr = selectedStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const endStr = selectedEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        // Check if selected range has availability
+        const rangeHasAvailability = checkRangeAvailability(selectedStartDate, selectedEndDate, data);
+
+        calendarHTML += `
+            <div class="selection-summary">
+                <div class="selection-dates">
+                    <strong>${startStr} - ${endStr}</strong> (${nights} ${nights === 1 ? 'night' : 'nights'})
+                    <button onclick="clearSelection()" class="btn-link" style="margin-left: 12px;">Clear</button>
+                </div>
+                ${rangeHasAvailability ? `
+                    <div class="selection-actions">
+                        <a href="${getBookingUrl(selectedStartDate, selectedEndDate)}" target="_blank" class="btn btn-primary">
+                            Book on Recreation.gov →
+                        </a>
                     </div>
-                </div>
-
-                <div class="availability-calendar">
-                    ${calendarHTML}
-                </div>
-
-                <div class="available-sites-list">
-                    <h4>Available Sites</h4>
-                    ${sitesHTML}
-                </div>
-
-                <div class="availability-actions">
-                    <a href="${data.booking_url}" target="_blank" class="btn btn-primary" style="text-decoration: none;">
-                        Book Now on Recreation.gov →
-                    </a>
-                    <button onclick="showWatchOption()" class="btn btn-secondary">
-                        Watch for More Availability
-                    </button>
-                </div>
+                ` : `
+                    <div class="selection-actions">
+                        <button onclick="createWatchForSelection()" class="btn btn-primary">
+                            Create Watch for These Dates
+                        </button>
+                    </div>
+                `}
             </div>
         `;
-    } else {
-        // Show sold out state with watch option
-        container.innerHTML = `
-            <div class="availability-results">
-                <div class="availability-header sold-out">
-                    <div class="availability-icon">✗</div>
-                    <div>
-                        <div class="availability-title">Sold Out</div>
-                        <div class="availability-subtitle">No sites available for ${nights} ${nights === 1 ? 'night' : 'nights'}</div>
-                    </div>
-                </div>
-
-                <div class="availability-calendar">
-                    ${calendarHTML}
-                </div>
-
-                <div class="watch-prompt">
-                    <p><strong>Want to be notified if sites become available?</strong></p>
-                    <p style="font-size: 14px; color: #78716c; margin-top: 8px;">
-                        We'll check every 5 minutes and email you when a site opens up.
-                    </p>
-                </div>
-
-                <div class="availability-actions">
-                    <button onclick="promptCreateWatch()" class="btn btn-primary" style="width: 100%;">
-                        Create Availability Watch
-                    </button>
+    } else if (selectedStartDate) {
+        const startStr = selectedStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        calendarHTML += `
+            <div class="selection-summary">
+                <div class="selection-dates">
+                    Check-in: <strong>${startStr}</strong> (click another date for check-out)
+                    <button onclick="clearSelection()" class="btn-link" style="margin-left: 12px;">Clear</button>
                 </div>
             </div>
         `;
     }
+
+    container.innerHTML = calendarHTML;
 }
 
-function showWatchOption() {
-    // User clicked "Watch for More Availability" even though sites exist
-    promptCreateWatch();
+function checkRangeAvailability(startDate, endDate, data) {
+    let currentDate = new Date(startDate);
+    while (currentDate < endDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const dayData = data.availability[dateStr];
+        if (dayData && dayData.status === 'available' && dayData.sites_count > 0) {
+            return true;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    return false;
 }
 
-async function promptCreateWatch() {
+function handleDateClick(dateStr, isAvailable) {
+    const clickedDate = new Date(dateStr + 'T00:00:00');
+
+    if (!selectedStartDate) {
+        // First click - set start date
+        selectedStartDate = clickedDate;
+        selectedEndDate = null;
+        loadMonthlyAvailability(); // Re-render to show selection
+    } else if (!selectedEndDate) {
+        // Second click - set end date
+        if (clickedDate > selectedStartDate) {
+            selectedEndDate = clickedDate;
+            loadMonthlyAvailability(); // Re-render to show full selection
+        } else {
+            // Clicked earlier date, reset
+            selectedStartDate = clickedDate;
+            selectedEndDate = null;
+            loadMonthlyAvailability();
+        }
+    } else {
+        // Already have both dates, reset selection
+        selectedStartDate = clickedDate;
+        selectedEndDate = null;
+        loadMonthlyAvailability();
+    }
+}
+
+function clearSelection() {
+    selectedStartDate = null;
+    selectedEndDate = null;
+    loadMonthlyAvailability();
+}
+
+function getBookingUrl(startDate, endDate) {
+    const nights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    const checkinStr = startDate.toISOString().split('T')[0];
+    return `https://www.recreation.gov/camping/campgrounds/${selectedCampground.id}/availability?date=${checkinStr}&length=${nights}`;
+}
+
+async function createWatchForSelection() {
+    if (!selectedStartDate || !selectedEndDate) {
+        alert('Please select check-in and check-out dates');
+        return;
+    }
+
     const email = prompt('Enter your email for availability alerts:');
     if (!email || !email.includes('@')) {
         alert('Valid email required');
         return;
     }
 
-    await createWatchWithEmail(email);
-}
-
-// Create watch with email
-async function createWatchWithEmail(email) {
-    const checkin = document.getElementById('checkinDate').value;
-    const checkout = document.getElementById('checkoutDate').value;
     const siteType = document.getElementById('siteType').value;
     const selectedSites = getSelectedSites();
-
-    if (!checkin || !checkout) {
-        alert('Please select check-in and check-out dates');
-        return;
-    }
-
-    if (new Date(checkout) <= new Date(checkin)) {
-        alert('Check-out must be after check-in');
-        return;
-    }
 
     const watchData = {
         campground_id: parseInt(selectedCampground.id),
         campground_name: selectedCampground.name,
-        checkin_date: checkin,
-        checkout_date: checkout,
+        checkin_date: selectedStartDate.toISOString().split('T')[0],
+        checkout_date: selectedEndDate.toISOString().split('T')[0],
         site_type: siteType,
         site_numbers: selectedSites.length > 0 ? selectedSites : null,
         alert_email: email
@@ -480,6 +527,23 @@ async function createWatchWithEmail(email) {
         alert('Failed to create watch: ' + err.message);
     }
 }
+
+function prevMonth() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+    if (newMonth >= today) {
+        currentMonth = newMonth;
+        loadMonthlyAvailability();
+    }
+}
+
+function nextMonth() {
+    currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+    loadMonthlyAvailability();
+}
+
 
 // Load watches
 async function loadWatches() {
